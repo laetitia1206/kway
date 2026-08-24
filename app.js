@@ -16,7 +16,7 @@ const SECTION_META = {
   stays: { label:'Hébergements', icon:'🏨', empty:'Ajoute tes hôtels, Airbnb ou autres hébergements.' },
   activities: { label:'Activités', icon:'🎟️', empty:'Ajoute les visites, restaurants, spectacles et activités.' },
   car: { label:'Location de voiture', icon:'🚗', empty:'Ajoute les informations de ta location de voiture.' },
-  itinerary: { label:'Itinéraire', icon:'🗺️', empty:'Ajoute les étapes de ton programme jour par jour.' },
+  itinerary: { label:'Programme', icon:'📅', empty:'Ajoute ton programme jour par jour avec horaires, adresses et billets.' },
   checklist: { label:'Checklist', icon:'✅', empty:'Ajoute ce que tu ne veux surtout pas oublier.' }
 };
 
@@ -45,6 +45,32 @@ function defaultCover(name=''){
   const idx=[...name].reduce((a,c)=>a+c.charCodeAt(0),0)%hues.length;
   const [h,s,l]=hues[idx]; return `linear-gradient(135deg,hsl(${h} ${s}% ${l+12}%),hsl(${h} ${s}% ${l-15}%))`;
 }
+
+function mapsUrl(address){ return `https://maps.apple.com/?q=${encodeURIComponent(address||'')}`; }
+function todayISO(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function allDatedItems(t){
+  const out=[];
+  for(const key of ['transport','activities','itinerary']) for(const x of sectionItems(t,key)) if(x.date) out.push({...x,_section:key});
+  return out.sort((a,b)=>(a.date+(a.time||'')).localeCompare(b.date+(b.time||'')));
+}
+function weatherCode(code){
+  if(code===0) return '☀️ Dégagé'; if([1,2].includes(code)) return '🌤️ Éclaircies'; if(code===3) return '☁️ Couvert';
+  if([45,48].includes(code)) return '🌫️ Brouillard'; if([51,53,55,56,57,61,63,65,66,67,80,81,82].includes(code)) return '🌧️ Pluie';
+  if([71,73,75,77,85,86].includes(code)) return '🌨️ Neige'; if([95,96,99].includes(code)) return '⛈️ Orage'; return '🌤️ Météo';
+}
+async function getWeatherForTrip(t){
+  const place=(t.destinations||'').split(/[•,]/)[0].trim(); if(!place) throw new Error('Ajoute une destination au voyage.');
+  const geo=await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(place)}&count=1&language=fr&format=json`).then(r=>r.json());
+  if(!geo.results?.length) throw new Error('Destination introuvable.');
+  const g=geo.results[0];
+  const w=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${g.latitude}&longitude=${g.longitude}&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto&forecast_days=16`).then(r=>r.json());
+  const rows=(w.daily?.time||[]).map((d,i)=>({date:d,code:w.daily.weather_code[i],max:w.daily.temperature_2m_max[i],min:w.daily.temperature_2m_min[i]}));
+  return {place:g.name, rows:rows.filter(x=>x.date>=t.startDate && x.date<=t.endDate)};
+}
+function openTicketDB(){ return new Promise((resolve,reject)=>{ const r=indexedDB.open('kway_files_v1',1); r.onupgradeneeded=()=>r.result.createObjectStore('tickets',{keyPath:'id'}); r.onsuccess=()=>resolve(r.result); r.onerror=()=>reject(r.error); }); }
+async function saveTicket(id,file){ const db=await openTicketDB(); return new Promise((res,rej)=>{ const tx=db.transaction('tickets','readwrite'); tx.objectStore('tickets').put({id,name:file.name,type:file.type,blob:file}); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); }); }
+async function getTicket(id){ const db=await openTicketDB(); return new Promise((res,rej)=>{ const r=db.transaction('tickets').objectStore('tickets').get(id); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+async function deleteTicket(id){ const db=await openTicketDB(); return new Promise((res,rej)=>{ const tx=db.transaction('tickets','readwrite'); tx.objectStore('tickets').delete(id); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); }); }
 
 function renderTrips(){
   const trips=loadTrips();
@@ -114,6 +140,7 @@ function showDetail(id){
     <div class="detail-hero" style="background-image:${cover}">
       <div class="detail-overlay"><h2>${esc(t.name)}</h2><p>${esc(formatDateRange(t.startDate,t.endDate))}${t.destinations?` · ${esc(t.destinations)}`:''}</p></div>
     </div>
+    <div class="section-card quick-grid"><button class="feature-btn" data-feature="today"><span>☀️</span><strong>Aujourd’hui</strong><small>Programme du jour</small></button><button class="feature-btn" data-feature="weather"><span>🌤️</span><strong>Météo</strong><small>Pendant le voyage</small></button></div>
     <div class="section-card"><h3>Organiser le voyage</h3><div class="menu-grid">${sectionButtons}</div></div>
     ${t.notes?`<div class="section-card"><h3>Notes</h3><div class="note-box">${esc(t.notes)}</div></div>`:''}
     <div class="detail-actions">
@@ -152,9 +179,11 @@ function renderItemCard(key,item){
   if(item.company) lines.push(esc(item.company));
   if(item.reference) lines.push(`Réf. ${esc(item.reference)}`);
   if(item.details) lines.push(esc(item.details));
+  if(item.duration) lines.push(`⏱️ ${esc(item.duration)}`);
   if(item.notes) lines.push(esc(item.notes));
   return `<article class="item-card">
     <div class="item-main"><h3>${esc(item.title||'Sans titre')}</h3>${lines.map(x=>`<p>${x}</p>`).join('')}</div>
+    <div class="item-links">${(item.address||item.to)?`<a class="small-btn" href="${mapsUrl(item.address||item.to)}" target="_blank">🗺️ Plans</a>`:''}${item.ticketName?`<button class="small-btn" data-ticket="${item.id}">🎫 Billet</button>`:''}</div>
     <div class="item-actions"><button class="more-btn" data-edit-item="${item.id}">✎</button><button class="more-btn danger-text" data-delete-item="${item.id}">×</button></div>
   </article>`;
 }
@@ -181,6 +210,7 @@ function getFieldsForSection(key,item){
     `<div class="two-cols">${fieldHtml('text','Départ','itemFrom',item.from||'','placeholder="Paris CDG"')}${fieldHtml('text','Arrivée','itemTo',item.to||'','placeholder="Montréal YUL"')}</div>`,
     `<div class="two-cols">${fieldHtml('date','Date','itemDate',item.date||'')}${fieldHtml('time','Heure','itemTime',item.time||'')}</div>`,
     fieldHtml('text','Numéro / référence','itemReference',item.reference||'','placeholder="Vol, train ou réservation"'),
+    fieldHtml('text','Durée estimée','itemDuration',item.duration||'','placeholder="Ex. 1 h 25"'),
     fieldHtml('textarea','Notes','itemNotes',item.notes||'','placeholder="Terminal, bagages, siège…"')
   ].join('');
   if(key==='stays') return [
@@ -206,9 +236,12 @@ function getFieldsForSection(key,item){
     fieldHtml('textarea','Notes','itemNotes',item.notes||'','placeholder="Assurance, frontière, modèle…"')
   ].join('');
   if(key==='itinerary') return [
-    fieldHtml('text','Étape / programme','itemTitle',item.title||'','required placeholder="Ex. Jour 3 · Ottawa"'),
-    fieldHtml('date','Date','itemDate',item.date||''),
-    fieldHtml('textarea','Programme','itemDetails',item.details||'','placeholder="Matin, midi, après-midi…"')
+    fieldHtml('text','Activité / étape','itemTitle',item.title||'','required placeholder="Ex. Visite de Nausicaá"'),
+    `<div class="two-cols">${fieldHtml('date','Date','itemDate',item.date||'')}${fieldHtml('time','Heure','itemTime',item.time||'')}</div>`,
+    fieldHtml('text','Adresse','itemAddress',item.address||'','placeholder="Adresse complète"'),
+    fieldHtml('text','Lien / réservation','itemReference',item.reference||'','placeholder="Numéro ou lien facultatif"'),
+    `<label>Billet / réservation <input id="itemTicket" type="file" accept="application/pdf,image/*"><small>${item.ticketName?`Billet actuel : ${esc(item.ticketName)} · choisir un fichier pour le remplacer`:'PDF ou photo, stocké uniquement sur cet appareil.'}</small></label>`,
+    fieldHtml('textarea','Notes','itemNotes',item.notes||'','placeholder="Informations utiles…"')
   ].join('');
   if(key==='checklist') return [
     fieldHtml('text','À ne pas oublier','itemTitle',item.title||'','required placeholder="Ex. Faire l’AVE"'),
@@ -220,20 +253,21 @@ function getFieldsForSection(key,item){
 function collectItem(key,existing){
   const val=id=>$(id)?.value?.trim?.()||'';
   const base={id:existing?.id||uid(),title:val('itemTitle'),updatedAt:Date.now(),createdAt:existing?.createdAt||Date.now()};
-  if(key==='transport') return {...base,company:val('itemCompany'),from:val('itemFrom'),to:val('itemTo'),date:val('itemDate'),time:val('itemTime'),reference:val('itemReference'),notes:val('itemNotes')};
+  if(key==='transport') return {...base,company:val('itemCompany'),from:val('itemFrom'),to:val('itemTo'),date:val('itemDate'),time:val('itemTime'),reference:val('itemReference'),duration:val('itemDuration'),notes:val('itemNotes')};
   if(key==='stays') return {...base,address:val('itemAddress'),startDate:val('itemStartDate'),endDate:val('itemEndDate'),reference:val('itemReference'),notes:val('itemNotes')};
   if(key==='activities') return {...base,date:val('itemDate'),time:val('itemTime'),location:val('itemLocation'),reference:val('itemReference'),notes:val('itemNotes')};
   if(key==='car') return {...base,company:val('itemCompany'),from:val('itemFrom'),to:val('itemTo'),startDate:val('itemStartDate'),endDate:val('itemEndDate'),reference:val('itemReference'),notes:val('itemNotes')};
-  if(key==='itinerary') return {...base,date:val('itemDate'),details:val('itemDetails')};
+  if(key==='itinerary') return {...base,date:val('itemDate'),time:val('itemTime'),address:val('itemAddress'),reference:val('itemReference'),notes:val('itemNotes'),ticketName:existing?.ticketName||''};
   if(key==='checklist') return {...base,notes:val('itemNotes'),done:existing?.done||false};
   return base;
 }
 
-$('itemForm').addEventListener('submit',(e)=>{
+$('itemForm').addEventListener('submit',async (e)=>{
   e.preventDefault();
   const trips=loadTrips(); const trip=trips.find(t=>t.id===currentTripId); if(!trip) return;
   const items=sectionItems(trip,currentSection); const existing=items.find(x=>x.id===editingItemId);
   const item=collectItem(currentSection,existing);
+  if(currentSection==='itinerary'){ const f=$('itemTicket')?.files?.[0]; if(f){ await saveTicket(item.id,f); item.ticketName=f.name; } }
   const nextItems=existing?items.map(x=>x.id===existing.id?item:x):[...items,item];
   const updated={...trip,sections:{...(trip.sections||{}),[currentSection]:nextItems},updatedAt:Date.now()};
   saveTrips(trips.map(t=>t.id===trip.id?updated:t)); closeItemForm(); showSection(currentSection);
@@ -247,7 +281,21 @@ tripList.addEventListener('click',(e)=>{
   if(action==='archive'){ saveTrips(trips.map(t=>t.id===id?{...t,archived:!t.archived,updatedAt:Date.now()}:t)); renderTrips(); }
 });
 
-$('detailContent').addEventListener('click',(e)=>{
+$('detailContent').addEventListener('click',async (e)=>{
+  const feature=e.target.closest('[data-feature]');
+  if(feature){
+    const t=loadTrips().find(x=>x.id===currentTripId); if(!t) return;
+    if(feature.dataset.feature==='today'){
+      const day=todayISO(); const items=allDatedItems(t).filter(x=>x.date===day);
+      $('detailContent').innerHTML=`<button class="back-btn" data-section-back>← ${esc(t.name)}</button><div class="section-title-row"><div><div class="eyebrow">☀️ AUJOURD’HUI</div><h2>${formatDate(day)}</h2></div></div>${items.length?`<div class="item-list">${items.map(x=>renderItemCard(x._section,x)).join('')}</div>`:`<div class="sub-empty"><div>🧳</div><p>${day<t.startDate?'Le voyage n’a pas encore commencé.':day>t.endDate?'Ce voyage est terminé.':'Rien de prévu aujourd’hui.'}</p></div>`}`;
+    } else {
+      $('detailContent').innerHTML=`<button class="back-btn" data-section-back>← ${esc(t.name)}</button><div class="section-title-row"><div><div class="eyebrow">🌤️ MÉTÉO</div><h2>Pendant le voyage</h2></div></div><div class="sub-empty"><div>⏳</div><p>Chargement de la météo…</p></div>`;
+      try{ const w=await getWeatherForTrip(t); $('detailContent').innerHTML=`<button class="back-btn" data-section-back>← ${esc(t.name)}</button><div class="section-title-row"><div><div class="eyebrow">🌤️ MÉTÉO · ${esc(w.place)}</div><h2>Pendant le voyage</h2></div></div>${w.rows.length?`<div class="weather-grid">${w.rows.map(x=>`<article class="weather-card"><strong>${formatDate(x.date)}</strong><span>${weatherCode(x.code)}</span><b>${Math.round(x.max)}°</b><small>${Math.round(x.min)}° min.</small></article>`).join('')}</div>`:`<div class="sub-empty"><div>📅</div><p>Les prévisions détaillées ne sont pas encore disponibles pour ces dates. Reviens à l’approche du voyage.</p></div>`}`; }catch(err){ $('detailContent').innerHTML+=`<p class="error-box">${esc(err.message)}</p>`; }
+    }
+    return;
+  }
+  const ticketBtn=e.target.closest('[data-ticket]');
+  if(ticketBtn){ const f=await getTicket(ticketBtn.dataset.ticket); if(!f){ alert('Billet introuvable sur cet appareil.'); return; } const url=URL.createObjectURL(f.blob); window.open(url,'_blank'); setTimeout(()=>URL.revokeObjectURL(url),60000); return; }
   const sectionBtn=e.target.closest('[data-section]');
   if(sectionBtn){ showSection(sectionBtn.dataset.section); return; }
   if(e.target.closest('[data-section-back]')){ showDetail(currentTripId); return; }
@@ -260,6 +308,7 @@ $('detailContent').addEventListener('click',(e)=>{
   if(delBtn){
     const trips=loadTrips(); const trip=trips.find(t=>t.id===currentTripId); if(!trip) return;
     if(confirm('Supprimer cet élément ?')){
+      if(currentSection==='itinerary') deleteTicket(delBtn.dataset.deleteItem).catch(()=>{});
       const next=sectionItems(trip,currentSection).filter(x=>x.id!==delBtn.dataset.deleteItem);
       const updated={...trip,sections:{...(trip.sections||{}),[currentSection]:next}};
       saveTrips(trips.map(t=>t.id===trip.id?updated:t)); showSection(currentSection);

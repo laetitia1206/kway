@@ -121,3 +121,17 @@ label small{display:block;margin-top:7px;color:#71809a;line-height:1.35}
 /* Kway 3.3 — compte & synchronisation */
 .top-actions{display:flex;align-items:center;gap:10px}.account-btn{border:1px solid #cfe0ff;background:#fff;color:#0b56d9;border-radius:999px;padding:10px 14px;font-weight:800;cursor:pointer;box-shadow:0 6px 18px rgba(11,86,217,.08)}.account-btn.synced{background:#eaf2ff;border-color:#b9d0ff}.auth-card{max-width:520px}.auth-intro{margin:0 0 16px;color:var(--muted);line-height:1.5}.auth-actions{flex-wrap:wrap}.account-panel{text-align:center;padding:8px 0}.sync-ok{display:inline-flex;gap:8px;align-items:center;background:#eaf2ff;color:#0b56d9;border-radius:999px;padding:10px 14px;margin:4px 0 12px}.muted-note{color:var(--muted);font-size:13px;line-height:1.5}.wide-btn{width:100%;margin-top:10px}.sync-toast{position:fixed;z-index:1000;left:50%;bottom:28px;transform:translateX(-50%);background:#0d2d55;color:#fff;border-radius:999px;padding:10px 16px;font-weight:800;box-shadow:0 12px 30px rgba(0,0,0,.18)}
 @media(max-width:560px){.account-btn{padding:9px 11px;font-size:12px}.top-actions{gap:7px}}
+
+/* Kway 3.3.1 — correctif affichage des photos de couverture */
+.trip-cover-image,.detail-cover-image{
+  position:absolute;
+  inset:0;
+  width:100%;
+  height:100%;
+  object-fit:cover;
+  display:block;
+}
+.trip-cover,.detail-hero{position:relative;overflow:hidden}
+.trip-cover::after,.detail-hero::after{z-index:1}
+.countdown-pill,.cover-copy,.detail-overlay{position:relative;z-index:2}
+.detail-overlay{position:absolute}

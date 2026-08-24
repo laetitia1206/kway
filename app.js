@@ -134,9 +134,10 @@ function renderTrips(){
   emptyText.textContent=currentFilter==='archived' ? 'Tes voyages archivés apparaîtront ici.' : 'Ajoute ton premier voyage pour commencer.';
   visible.forEach(t=>{
     const card=document.createElement('article'); card.className='trip-card travel-tile';
-    const coverValue=tripCoverValue(t); const cover = coverValue ? `url("${coverValue.replace(/"/g,'%22')}")` : defaultCover(t.name);
+    const coverValue=tripCoverValue(t);
     card.innerHTML=`
-      <div class="trip-cover" style="background-image:${cover}">
+      <div class="trip-cover" ${coverValue?'':`style="background:${defaultCover(t.name)}"`}>
+        ${coverValue?`<img class="trip-cover-image" src="${coverValue}" alt="">`:''}
         <span class="countdown-pill">${esc(countdownLabel(t))}</span>
         <div class="cover-copy"><h3>${esc(t.name)}</h3><p>${esc(formatDateRange(t.startDate,t.endDate))}</p>${t.destinations?`<small>📍 ${esc(t.destinations)}</small>`:''}</div>
       </div>
@@ -192,13 +193,14 @@ function showDetail(id){
   const t=loadTrips().find(x=>x.id===id); if(!t) return;
   currentTripId=id; currentSection=null;
   $('homeView').classList.remove('active'); $('detailView').classList.add('active');
-  const coverValue=tripCoverValue(t); const cover=coverValue?`url("${coverValue.replace(/"/g,'%22')}")`:defaultCover(t.name);
+  const coverValue=tripCoverValue(t);
   const sectionButtons=Object.entries(SECTION_META).map(([key,m])=>{
     const count=sectionItems(t,key).length;
     return `<button class="menu-item" data-section="${key}"><span>${m.icon}</span><strong>${m.label}</strong>${count?`<em>${count}</em>`:''}</button>`;
   }).join('');
   $('detailContent').innerHTML=`
-    <div class="detail-hero" style="background-image:${cover}">
+    <div class="detail-hero" ${coverValue?'':`style="background:${defaultCover(t.name)}"`}>
+      ${coverValue?`<img class="detail-cover-image" src="${coverValue}" alt="">`:''}
       <div class="detail-overlay"><h2>${esc(t.name)}</h2><p>${esc(formatDateRange(t.startDate,t.endDate))}${t.destinations?` · ${esc(t.destinations)}`:''}</p></div>
     </div>
     <div class="journey-status"><span>${esc(countdownLabel(t))}</span><strong>${esc(t.destinations||'Ton prochain voyage')}</strong></div>
@@ -287,6 +289,7 @@ function getFieldsForSection(key,item){
     `<div class="two-cols">${fieldHtml('date','Date','itemDate',item.date||'')}${fieldHtml('time','Heure','itemTime',item.time||'')}</div>`,
     fieldHtml('text','Lieu','itemLocation',item.location||'','placeholder="Scotiabank Arena"'),
     fieldHtml('text','Référence / billet','itemReference',item.reference||''),
+    `<label>Billets & documents <input id="itemTickets" type="file" accept="application/pdf,image/*" multiple><small>${ticketMeta(item).length?`${ticketMeta(item).length} document(s) déjà enregistré(s). Tu peux en ajouter d’autres.`:'Tu peux sélectionner plusieurs PDF ou photos. Ils restent uniquement sur cet appareil.'}</small></label>`,
     fieldHtml('textarea','Notes','itemNotes',item.notes||'')
   ].join('');
   if(key==='car') return [
@@ -317,7 +320,7 @@ function collectItem(key,existing){
   const base={id:existing?.id||uid(),title:val('itemTitle'),updatedAt:Date.now(),createdAt:existing?.createdAt||Date.now()};
   if(key==='transport') return {...base,company:val('itemCompany'),from:val('itemFrom'),to:val('itemTo'),date:val('itemDate'),time:val('itemTime'),reference:val('itemReference'),duration:val('itemDuration'),notes:val('itemNotes')};
   if(key==='stays') return {...base,address:val('itemAddress'),startDate:val('itemStartDate'),endDate:val('itemEndDate'),reference:val('itemReference'),notes:val('itemNotes')};
-  if(key==='activities') return {...base,date:val('itemDate'),time:val('itemTime'),location:val('itemLocation'),reference:val('itemReference'),notes:val('itemNotes')};
+  if(key==='activities') return {...base,date:val('itemDate'),time:val('itemTime'),location:val('itemLocation'),reference:val('itemReference'),notes:val('itemNotes'),tickets:ticketMeta(existing||{}),ticketName:existing?.ticketName||''};
   if(key==='car') return {...base,company:val('itemCompany'),from:val('itemFrom'),to:val('itemTo'),startDate:val('itemStartDate'),endDate:val('itemEndDate'),reference:val('itemReference'),notes:val('itemNotes')};
   if(key==='itinerary') return {...base,date:val('itemDate'),time:val('itemTime'),address:val('itemAddress'),reference:val('itemReference'),notes:val('itemNotes'),tickets:ticketMeta(existing||{}),ticketName:existing?.ticketName||''};
   if(key==='checklist') return {...base,notes:val('itemNotes'),done:existing?.done||false};
@@ -329,7 +332,7 @@ $('itemForm').addEventListener('submit',async (e)=>{
   const trips=loadTrips(); const trip=trips.find(t=>t.id===currentTripId); if(!trip) return;
   const items=sectionItems(trip,currentSection); const existing=items.find(x=>x.id===editingItemId);
   const item=collectItem(currentSection,existing);
-  if(currentSection==='itinerary'){
+  if(['activities','itinerary'].includes(currentSection)){
     const files=Array.from($('itemTickets')?.files||[]);
     if(files.length){
       const added=[];
@@ -378,7 +381,7 @@ $('detailContent').addEventListener('click',async (e)=>{
   if(delBtn){
     const trips=loadTrips(); const trip=trips.find(t=>t.id===currentTripId); if(!trip) return;
     if(confirm('Supprimer cet élément ?')){
-      if(currentSection==='itinerary'){ const doomed=sectionItems(trip,currentSection).find(x=>x.id===delBtn.dataset.deleteItem); for(const tk of ticketMeta(doomed||{})) deleteTicket(tk.id).catch(()=>{}); }
+      if(['activities','itinerary'].includes(currentSection)){ const doomed=sectionItems(trip,currentSection).find(x=>x.id===delBtn.dataset.deleteItem); for(const tk of ticketMeta(doomed||{})) deleteTicket(tk.id).catch(()=>{}); }
       const next=sectionItems(trip,currentSection).filter(x=>x.id!==delBtn.dataset.deleteItem);
       const updated={...trip,sections:{...(trip.sections||{}),[currentSection]:next}};
       saveTrips(trips.map(t=>t.id===trip.id?updated:t)); showSection(currentSection);

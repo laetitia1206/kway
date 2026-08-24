@@ -97,20 +97,23 @@ body{background:linear-gradient(180deg,#f8fbfa 0,#f2f7f6 42%,#f7f8f7 100%)}
 .weather-card{border:1px solid #e6efee}
 @media(max-width:650px){.menu-grid{grid-template-columns:1fr 1fr}.trip-list{grid-template-columns:1fr}.travel-tile .trip-cover{height:230px}.detail-hero{min-height:250px}.detail-overlay h2{font-size:34px}}
 
-
-/* Kway 3.2 — thème bleu + photos locales */
-:root{--primary:#165dcc;--primary-dark:#0d3d91;--soft:#eaf2ff;--ink:#10284d;--muted:#667892;--line:#dbe6f6;--shadow:0 14px 38px rgba(28,78,150,.12)}
-body{background:linear-gradient(180deg,#f8fbff 0,#f1f6ff 45%,#f8faff 100%)}
+/* Kway V3.2 — thème bleu + photos iPhone */
+:root{--primary:#0b56d9;--primary-dark:#083f9f;--ink:#102449;--muted:#66758e;--bg:#f6f9ff;--card:#fff;--line:#e4ebf8;--soft:#eef4ff;--shadow:0 12px 32px rgba(28,70,140,.12)}
+body{background:linear-gradient(180deg,#f8fbff 0%,#f3f7ff 52%,#f8faff 100%);color:var(--ink)}
 .topbar{background:rgba(248,251,255,.9)}
-.brand,.brand span,.eyebrow,.back-btn{color:#165dcc}
-.round-btn,.small-btn.primary,.primary-btn{background:#165dcc;border-color:#165dcc}
-.segmented{background:#eaf1fb}.segment.active{color:#0f397e}
-.countdown-pill{background:rgba(20,78,170,.92)}
-.journey-status{background:#e9f2ff}.journey-status span{color:#165dcc}
-.feature-btn.mint{background:#edf5ff}.feature-btn.sky{background:#e5efff}
-.menu-item:nth-child(1){background:#e9f3ff}.menu-item:nth-child(2){background:#f2f6ff}.menu-item:nth-child(3){background:#edf1ff}.menu-item:nth-child(4){background:#eef6ff}.menu-item:nth-child(5){background:#e8f1ff}.menu-item:nth-child(6){background:#f1f5fb}
-.menu-item em{color:#165dcc}.weather-card b{color:#165dcc}
-.photo-picker{position:relative;margin-top:7px;border:1.5px dashed #9db9e8;background:#f3f7ff;border-radius:16px;padding:17px;text-align:center;color:#165dcc;font-weight:800;overflow:hidden}
-.photo-picker input{position:absolute;inset:0;opacity:0;cursor:pointer;margin:0;padding:0}
-.photo-picker+small{display:block;margin-top:7px;color:var(--muted);font-weight:500}
-.travel-tile .trip-cover,.detail-hero{background-color:#dceaff}
+.eyebrow{color:#0b56d9}
+.brand,.brand span{color:#123f93}
+.round-btn,.primary-btn,.small-btn.primary{background:#0b56d9!important;color:#fff!important;box-shadow:0 10px 22px rgba(11,86,217,.22)}
+.segmented{background:#eaf1ff}.segment.active{color:#0b56d9;box-shadow:0 4px 16px rgba(11,86,217,.10)}
+.countdown-pill{background:rgba(11,86,217,.92)}
+.travel-tile .trip-cover,.detail-hero{box-shadow:0 16px 36px rgba(16,51,108,.18)}
+.travel-tile .trip-cover::after{background:linear-gradient(180deg,rgba(2,22,62,.02) 20%,rgba(3,26,70,.78) 100%)}
+.journey-status{background:#eaf2ff}.journey-status span{color:#0b56d9}
+.feature-btn.mint{background:#eef5ff}.feature-btn.sky{background:#e7f1ff}
+.menu-item:nth-child(1){background:#eef5ff}.menu-item:nth-child(2){background:#f4f7ff}.menu-item:nth-child(3){background:#edf2ff}.menu-item:nth-child(4){background:#f2f6ff}.menu-item:nth-child(5){background:#eaf2ff}.menu-item:nth-child(6){background:#f0f5ff}
+.menu-item em{background:#dbe8ff;color:#0b56d9}
+.back-btn{color:#0b56d9}.item-card,.section-card,.weather-card{border-color:#e8eef9}.ticket-chip{background:#eef4ff!important;border-color:#cddcff!important;color:#0b56d9!important}
+.form-card{border:1px solid #e3ebfa}.form-card input:focus,.form-card textarea:focus,.form-card select:focus{border-color:#0b56d9;box-shadow:0 0 0 3px rgba(11,86,217,.12)}
+.cover-preview-wrap{display:grid;gap:10px}.cover-preview-wrap.hidden{display:none}.cover-preview{width:100%;height:190px;object-fit:cover;border-radius:20px;border:1px solid #dce6f7;box-shadow:0 10px 24px rgba(30,72,145,.12)}
+label small{display:block;margin-top:7px;color:#71809a;line-height:1.35}
+@media(max-width:650px){.app-shell{padding-left:14px;padding-right:14px}.brand{font-size:42px!important}.travel-tile .trip-cover{height:235px}.detail-hero{min-height:270px;border-radius:0 0 28px 28px}.section-card{border-radius:22px}.menu-item{min-height:108px}}

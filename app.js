@@ -50,6 +50,22 @@ function mapsUrl(address){ return `https://maps.apple.com/?q=${encodeURIComponen
 function todayISO(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
 function daysUntil(date){ const a=new Date(todayISO()+'T12:00:00'),b=new Date(date+'T12:00:00'); return Math.ceil((b-a)/86400000); }
 function countdownLabel(t){ const n=daysUntil(t.startDate); if(n>1)return `Départ dans ${n} jours`; if(n===1)return 'Départ demain'; if(n===0)return 'Départ aujourd’hui'; if(todayISO()<=t.endDate)return 'Voyage en cours'; return 'Voyage terminé'; }
+async function imageFileToDataUrl(file){
+  if(!file) return '';
+  if(!file.type.startsWith('image/')) throw new Error('Choisis une image valide.');
+  const raw=await new Promise((resolve,reject)=>{ const r=new FileReader(); r.onload=()=>resolve(r.result); r.onerror=()=>reject(r.error); r.readAsDataURL(file); });
+  const img=await new Promise((resolve,reject)=>{ const i=new Image(); i.onload=()=>resolve(i); i.onerror=reject; i.src=raw; });
+  const max=1400, scale=Math.min(1,max/Math.max(img.width,img.height));
+  const canvas=document.createElement('canvas'); canvas.width=Math.max(1,Math.round(img.width*scale)); canvas.height=Math.max(1,Math.round(img.height*scale));
+  canvas.getContext('2d').drawImage(img,0,0,canvas.width,canvas.height);
+  return canvas.toDataURL('image/jpeg',0.78);
+}
+function tripCoverValue(t){ return t?.coverData || t?.coverUrl || ''; }
+function updateCoverPreview(src=''){
+  const wrap=$('coverPreviewWrap'), img=$('coverPreview'); if(!wrap||!img) return;
+  if(src){ img.src=src; wrap.classList.remove('hidden'); } else { img.removeAttribute('src'); wrap.classList.add('hidden'); }
+}
+
 
 function allDatedItems(t){
   const out=[];
@@ -74,13 +90,6 @@ function openTicketDB(){ return new Promise((resolve,reject)=>{ const r=indexedD
 async function saveTicket(id,file){ const db=await openTicketDB(); return new Promise((res,rej)=>{ const tx=db.transaction('tickets','readwrite'); tx.objectStore('tickets').put({id,name:file.name,type:file.type,blob:file}); tx.oncomplete=()=>res({id,name:file.name,type:file.type}); tx.onerror=()=>rej(tx.error); }); }
 async function getTicket(id){ const db=await openTicketDB(); return new Promise((res,rej)=>{ const r=db.transaction('tickets').objectStore('tickets').get(id); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
 async function deleteTicket(id){ const db=await openTicketDB(); return new Promise((res,rej)=>{ const tx=db.transaction('tickets','readwrite'); tx.objectStore('tickets').delete(id); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); }); }
-
-function openCoverDB(){ return new Promise((resolve,reject)=>{ const r=indexedDB.open('kway_covers_v1',1); r.onupgradeneeded=()=>r.result.createObjectStore('covers',{keyPath:'id'}); r.onsuccess=()=>resolve(r.result); r.onerror=()=>reject(r.error); }); }
-async function saveCover(id,file){ const db=await openCoverDB(); return new Promise((res,rej)=>{ const tx=db.transaction('covers','readwrite'); tx.objectStore('covers').put({id,blob:file}); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); }); }
-async function getCover(id){ const db=await openCoverDB(); return new Promise((res,rej)=>{ const r=db.transaction('covers').objectStore('covers').get(id); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
-async function deleteCover(id){ const db=await openCoverDB(); return new Promise((res,rej)=>{ const tx=db.transaction('covers','readwrite'); tx.objectStore('covers').delete(id); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); }); }
-async function applyLocalCover(el,trip){ if(!el || !trip?.coverLocal) return; try{ const rec=await getCover(trip.id); if(rec?.blob){ const u=URL.createObjectURL(rec.blob); el.style.backgroundImage=`url("${u}")`; } }catch{} }
-
 function ticketMeta(item){ const list=Array.isArray(item.tickets)?item.tickets.slice():[]; if(item.ticketName&&!list.some(x=>x.id===item.id)) list.unshift({id:item.id,name:item.ticketName}); return list; }
 
 function renderTrips(){
@@ -91,7 +100,7 @@ function renderTrips(){
   emptyText.textContent=currentFilter==='archived' ? 'Tes voyages archivés apparaîtront ici.' : 'Ajoute ton premier voyage pour commencer.';
   visible.forEach(t=>{
     const card=document.createElement('article'); card.className='trip-card travel-tile';
-    const cover = t.coverUrl ? `url("${esc(t.coverUrl)}")` : defaultCover(t.name);
+    const coverValue=tripCoverValue(t); const cover = coverValue ? `url("${coverValue.replace(/"/g,'%22')}")` : defaultCover(t.name);
     card.innerHTML=`
       <div class="trip-cover" style="background-image:${cover}">
         <span class="countdown-pill">${esc(countdownLabel(t))}</span>
@@ -103,7 +112,6 @@ function renderTrips(){
         <button class="small-btn" data-action="archive" data-id="${t.id}">${t.archived?'Restaurer':'Archiver'}</button>
       </div>`;
     tripList.appendChild(card);
-    if(t.coverLocal) applyLocalCover(card.querySelector('.trip-cover'),t);
   });
 }
 function openForm(trip=null){
@@ -113,9 +121,10 @@ function openForm(trip=null){
   $('startDate').value=trip?.startDate||'';
   $('endDate').value=trip?.endDate||'';
   $('destinations').value=trip?.destinations||'';
-  $('coverHelp').textContent=trip?.coverLocal?'Une photo est déjà enregistrée. Choisis-en une autre pour la remplacer.':'La photo reste uniquement sur cet appareil.';
-  $('coverFile').value='';
   $('tripNotes').value=trip?.notes||'';
+  $('coverPhoto').value='';
+  $('coverPhoto').dataset.remove='0';
+  updateCoverPreview(tripCoverValue(trip));
   dialog.showModal();
 }
 function closeForm(){ dialog.close(); }
@@ -126,29 +135,36 @@ $('tripForm').addEventListener('submit',async (e)=>{
   if(end<start){ alert('La date de fin doit être après la date de début.'); return; }
   const trips=loadTrips(); const id=$('tripId').value;
   const existing=trips.find(t=>t.id===id);
-  const tripId=id||uid();
-  const coverFile=$('coverFile').files?.[0];
-  if(coverFile) await saveCover(tripId,coverFile);
+  let coverData=existing?.coverData||'';
+  let coverUrl=existing?.coverUrl||'';
+  if($('coverPhoto').dataset.remove==='1'){ coverData=''; coverUrl=''; }
+  const photo=$('coverPhoto').files?.[0];
+  if(photo){
+    try{ coverData=await imageFileToDataUrl(photo); coverUrl=''; }
+    catch(err){ alert(err?.message||'Impossible de lire cette photo.'); return; }
+  }
   const trip={
-    id:tripId, name:$('tripName').value.trim(), startDate:start, endDate:end,
-    destinations:$('destinations').value.trim(), coverUrl:existing?.coverUrl||'', coverLocal:coverFile?true:(existing?.coverLocal||false), notes:$('tripNotes').value.trim(),
+    id:id||uid(), name:$('tripName').value.trim(), startDate:start, endDate:end,
+    destinations:$('destinations').value.trim(), coverData, coverUrl, notes:$('tripNotes').value.trim(),
     sections:existing?.sections||{}, archived:existing?.archived||false, createdAt:existing?.createdAt||Date.now(), updatedAt:Date.now()
   };
-  const next=existing?trips.map(t=>t.id===id?trip:t):[...trips,trip]; saveTrips(next); closeForm(); renderTrips();
-  if(currentTripId===trip.id) showDetail(trip.id);
+  try{
+    const next=existing?trips.map(t=>t.id===id?trip:t):[...trips,trip]; saveTrips(next); closeForm(); renderTrips();
+    if(currentTripId===trip.id) showDetail(trip.id);
+  }catch(err){ alert('La photo est trop volumineuse pour être enregistrée. Essaie une photo plus légère.'); }
 });
 
 function showDetail(id){
   const t=loadTrips().find(x=>x.id===id); if(!t) return;
   currentTripId=id; currentSection=null;
   $('homeView').classList.remove('active'); $('detailView').classList.add('active');
-  const cover=t.coverUrl?`url("${esc(t.coverUrl)}")`:defaultCover(t.name);
+  const coverValue=tripCoverValue(t); const cover=coverValue?`url("${coverValue.replace(/"/g,'%22')}")`:defaultCover(t.name);
   const sectionButtons=Object.entries(SECTION_META).map(([key,m])=>{
     const count=sectionItems(t,key).length;
     return `<button class="menu-item" data-section="${key}"><span>${m.icon}</span><strong>${m.label}</strong>${count?`<em>${count}</em>`:''}</button>`;
   }).join('');
   $('detailContent').innerHTML=`
-    <div class="detail-hero" id="detailHero" style="background-image:${cover}">
+    <div class="detail-hero" style="background-image:${cover}">
       <div class="detail-overlay"><h2>${esc(t.name)}</h2><p>${esc(formatDateRange(t.startDate,t.endDate))}${t.destinations?` · ${esc(t.destinations)}`:''}</p></div>
     </div>
     <div class="journey-status"><span>${esc(countdownLabel(t))}</span><strong>${esc(t.destinations||'Ton prochain voyage')}</strong></div>
@@ -160,7 +176,6 @@ function showDetail(id){
       <button class="small-btn" data-detail="archive">${t.archived?'Restaurer':'Archiver ce voyage'}</button>
       <button class="small-btn danger" data-detail="delete">Supprimer</button>
     </div>`;
-  if(t.coverLocal) applyLocalCover($('detailHero'),t);
 }
 
 function showSection(key){
@@ -352,7 +367,7 @@ $('detailContent').addEventListener('click',async (e)=>{
   }
   if(b.dataset.detail==='delete'){
     if(confirm(`Supprimer définitivement « ${trip.name} » ?`)){
-      deleteCover(trip.id).catch(()=>{}); saveTrips(trips.filter(t=>t.id!==trip.id)); currentTripId=null; $('detailView').classList.remove('active'); $('homeView').classList.add('active'); renderTrips();
+      saveTrips(trips.filter(t=>t.id!==trip.id)); currentTripId=null; $('detailView').classList.remove('active'); $('homeView').classList.add('active'); renderTrips();
     }
   }
 });
@@ -364,6 +379,12 @@ $('newTripBtn').addEventListener('click',()=>openForm()); $('emptyAddBtn').addEv
 $('closeDialogBtn').addEventListener('click',closeForm); $('cancelBtn').addEventListener('click',closeForm);
 $('closeItemDialogBtn').addEventListener('click',closeItemForm); $('cancelItemBtn').addEventListener('click',closeItemForm);
 $('backBtn').addEventListener('click',()=>{currentTripId=null;currentSection=null;$('detailView').classList.remove('active');$('homeView').classList.add('active');renderTrips();});
+$('coverPhoto').addEventListener('change',async ()=>{
+  const f=$('coverPhoto').files?.[0]; if(!f) return;
+  try{ updateCoverPreview(await imageFileToDataUrl(f)); $('coverPhoto').dataset.remove='0'; }catch(err){ alert(err?.message||'Impossible de lire cette photo.'); $('coverPhoto').value=''; }
+});
+$('removeCoverBtn').addEventListener('click',()=>{ $('coverPhoto').value=''; $('coverPhoto').dataset.remove='1'; updateCoverPreview(''); });
+
 
 if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').catch(()=>{})); }
 renderTrips();

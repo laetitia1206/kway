@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#165DCC" />
+  <meta name="theme-color" content="#0b56d9" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Kway" />
@@ -80,12 +80,13 @@
       </label>
 
       <label>Photo de couverture
-        <div class="photo-picker">
-          <input id="coverFile" type="file" accept="image/*" />
-          <span>📷 Choisir une photo depuis l’iPhone ou le Mac</span>
-        </div>
-        <small id="coverHelp">La photo reste uniquement sur cet appareil.</small>
+        <input id="coverPhoto" type="file" accept="image/*" />
+        <small>Sur iPhone, choisis une photo dans ta photothèque. Elle reste enregistrée uniquement sur cet appareil.</small>
       </label>
+      <div id="coverPreviewWrap" class="cover-preview-wrap hidden">
+        <img id="coverPreview" class="cover-preview" alt="Aperçu de la photo du voyage" />
+        <button type="button" id="removeCoverBtn" class="small-btn">Retirer la photo</button>
+      </div>
 
       <label>Notes
         <textarea id="tripNotes" rows="3" placeholder="Une idée, un objectif, une réservation à ne pas oublier…"></textarea>

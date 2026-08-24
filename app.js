@@ -74,6 +74,13 @@ function openTicketDB(){ return new Promise((resolve,reject)=>{ const r=indexedD
 async function saveTicket(id,file){ const db=await openTicketDB(); return new Promise((res,rej)=>{ const tx=db.transaction('tickets','readwrite'); tx.objectStore('tickets').put({id,name:file.name,type:file.type,blob:file}); tx.oncomplete=()=>res({id,name:file.name,type:file.type}); tx.onerror=()=>rej(tx.error); }); }
 async function getTicket(id){ const db=await openTicketDB(); return new Promise((res,rej)=>{ const r=db.transaction('tickets').objectStore('tickets').get(id); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
 async function deleteTicket(id){ const db=await openTicketDB(); return new Promise((res,rej)=>{ const tx=db.transaction('tickets','readwrite'); tx.objectStore('tickets').delete(id); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); }); }
+
+function openCoverDB(){ return new Promise((resolve,reject)=>{ const r=indexedDB.open('kway_covers_v1',1); r.onupgradeneeded=()=>r.result.createObjectStore('covers',{keyPath:'id'}); r.onsuccess=()=>resolve(r.result); r.onerror=()=>reject(r.error); }); }
+async function saveCover(id,file){ const db=await openCoverDB(); return new Promise((res,rej)=>{ const tx=db.transaction('covers','readwrite'); tx.objectStore('covers').put({id,blob:file}); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); }); }
+async function getCover(id){ const db=await openCoverDB(); return new Promise((res,rej)=>{ const r=db.transaction('covers').objectStore('covers').get(id); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
+async function deleteCover(id){ const db=await openCoverDB(); return new Promise((res,rej)=>{ const tx=db.transaction('covers','readwrite'); tx.objectStore('covers').delete(id); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); }); }
+async function applyLocalCover(el,trip){ if(!el || !trip?.coverLocal) return; try{ const rec=await getCover(trip.id); if(rec?.blob){ const u=URL.createObjectURL(rec.blob); el.style.backgroundImage=`url("${u}")`; } }catch{} }
+
 function ticketMeta(item){ const list=Array.isArray(item.tickets)?item.tickets.slice():[]; if(item.ticketName&&!list.some(x=>x.id===item.id)) list.unshift({id:item.id,name:item.ticketName}); return list; }
 
 function renderTrips(){
@@ -96,6 +103,7 @@ function renderTrips(){
         <button class="small-btn" data-action="archive" data-id="${t.id}">${t.archived?'Restaurer':'Archiver'}</button>
       </div>`;
     tripList.appendChild(card);
+    if(t.coverLocal) applyLocalCover(card.querySelector('.trip-cover'),t);
   });
 }
 function openForm(trip=null){
@@ -105,21 +113,25 @@ function openForm(trip=null){
   $('startDate').value=trip?.startDate||'';
   $('endDate').value=trip?.endDate||'';
   $('destinations').value=trip?.destinations||'';
-  $('coverUrl').value=trip?.coverUrl||'';
+  $('coverHelp').textContent=trip?.coverLocal?'Une photo est déjà enregistrée. Choisis-en une autre pour la remplacer.':'La photo reste uniquement sur cet appareil.';
+  $('coverFile').value='';
   $('tripNotes').value=trip?.notes||'';
   dialog.showModal();
 }
 function closeForm(){ dialog.close(); }
 
-$('tripForm').addEventListener('submit',(e)=>{
+$('tripForm').addEventListener('submit',async (e)=>{
   e.preventDefault();
   const start=$('startDate').value,end=$('endDate').value;
   if(end<start){ alert('La date de fin doit être après la date de début.'); return; }
   const trips=loadTrips(); const id=$('tripId').value;
   const existing=trips.find(t=>t.id===id);
+  const tripId=id||uid();
+  const coverFile=$('coverFile').files?.[0];
+  if(coverFile) await saveCover(tripId,coverFile);
   const trip={
-    id:id||uid(), name:$('tripName').value.trim(), startDate:start, endDate:end,
-    destinations:$('destinations').value.trim(), coverUrl:$('coverUrl').value.trim(), notes:$('tripNotes').value.trim(),
+    id:tripId, name:$('tripName').value.trim(), startDate:start, endDate:end,
+    destinations:$('destinations').value.trim(), coverUrl:existing?.coverUrl||'', coverLocal:coverFile?true:(existing?.coverLocal||false), notes:$('tripNotes').value.trim(),
     sections:existing?.sections||{}, archived:existing?.archived||false, createdAt:existing?.createdAt||Date.now(), updatedAt:Date.now()
   };
   const next=existing?trips.map(t=>t.id===id?trip:t):[...trips,trip]; saveTrips(next); closeForm(); renderTrips();
@@ -136,7 +148,7 @@ function showDetail(id){
     return `<button class="menu-item" data-section="${key}"><span>${m.icon}</span><strong>${m.label}</strong>${count?`<em>${count}</em>`:''}</button>`;
   }).join('');
   $('detailContent').innerHTML=`
-    <div class="detail-hero" style="background-image:${cover}">
+    <div class="detail-hero" id="detailHero" style="background-image:${cover}">
       <div class="detail-overlay"><h2>${esc(t.name)}</h2><p>${esc(formatDateRange(t.startDate,t.endDate))}${t.destinations?` · ${esc(t.destinations)}`:''}</p></div>
     </div>
     <div class="journey-status"><span>${esc(countdownLabel(t))}</span><strong>${esc(t.destinations||'Ton prochain voyage')}</strong></div>
@@ -148,6 +160,7 @@ function showDetail(id){
       <button class="small-btn" data-detail="archive">${t.archived?'Restaurer':'Archiver ce voyage'}</button>
       <button class="small-btn danger" data-detail="delete">Supprimer</button>
     </div>`;
+  if(t.coverLocal) applyLocalCover($('detailHero'),t);
 }
 
 function showSection(key){
@@ -339,7 +352,7 @@ $('detailContent').addEventListener('click',async (e)=>{
   }
   if(b.dataset.detail==='delete'){
     if(confirm(`Supprimer définitivement « ${trip.name} » ?`)){
-      saveTrips(trips.filter(t=>t.id!==trip.id)); currentTripId=null; $('detailView').classList.remove('active'); $('homeView').classList.add('active'); renderTrips();
+      deleteCover(trip.id).catch(()=>{}); saveTrips(trips.filter(t=>t.id!==trip.id)); currentTripId=null; $('detailView').classList.remove('active'); $('homeView').classList.add('active'); renderTrips();
     }
   }
 });

@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#1f6f78" />
+  <meta name="theme-color" content="#165DCC" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Kway" />
@@ -80,7 +80,11 @@
       </label>
 
       <label>Photo de couverture
-        <input id="coverUrl" type="url" placeholder="https://… (facultatif)" />
+        <div class="photo-picker">
+          <input id="coverFile" type="file" accept="image/*" />
+          <span>📷 Choisir une photo depuis l’iPhone ou le Mac</span>
+        </div>
+        <small id="coverHelp">La photo reste uniquement sur cet appareil.</small>
       </label>
 
       <label>Notes

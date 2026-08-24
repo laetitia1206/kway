@@ -48,6 +48,9 @@ function defaultCover(name=''){
 
 function mapsUrl(address){ return `https://maps.apple.com/?q=${encodeURIComponent(address||'')}`; }
 function todayISO(){ const d=new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function daysUntil(date){ const a=new Date(todayISO()+'T12:00:00'),b=new Date(date+'T12:00:00'); return Math.ceil((b-a)/86400000); }
+function countdownLabel(t){ const n=daysUntil(t.startDate); if(n>1)return `Départ dans ${n} jours`; if(n===1)return 'Départ demain'; if(n===0)return 'Départ aujourd’hui'; if(todayISO()<=t.endDate)return 'Voyage en cours'; return 'Voyage terminé'; }
+
 function allDatedItems(t){
   const out=[];
   for(const key of ['transport','activities','itinerary']) for(const x of sectionItems(t,key)) if(x.date) out.push({...x,_section:key});
@@ -68,9 +71,10 @@ async function getWeatherForTrip(t){
   return {place:g.name, rows:rows.filter(x=>x.date>=t.startDate && x.date<=t.endDate)};
 }
 function openTicketDB(){ return new Promise((resolve,reject)=>{ const r=indexedDB.open('kway_files_v1',1); r.onupgradeneeded=()=>r.result.createObjectStore('tickets',{keyPath:'id'}); r.onsuccess=()=>resolve(r.result); r.onerror=()=>reject(r.error); }); }
-async function saveTicket(id,file){ const db=await openTicketDB(); return new Promise((res,rej)=>{ const tx=db.transaction('tickets','readwrite'); tx.objectStore('tickets').put({id,name:file.name,type:file.type,blob:file}); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); }); }
+async function saveTicket(id,file){ const db=await openTicketDB(); return new Promise((res,rej)=>{ const tx=db.transaction('tickets','readwrite'); tx.objectStore('tickets').put({id,name:file.name,type:file.type,blob:file}); tx.oncomplete=()=>res({id,name:file.name,type:file.type}); tx.onerror=()=>rej(tx.error); }); }
 async function getTicket(id){ const db=await openTicketDB(); return new Promise((res,rej)=>{ const r=db.transaction('tickets').objectStore('tickets').get(id); r.onsuccess=()=>res(r.result); r.onerror=()=>rej(r.error); }); }
 async function deleteTicket(id){ const db=await openTicketDB(); return new Promise((res,rej)=>{ const tx=db.transaction('tickets','readwrite'); tx.objectStore('tickets').delete(id); tx.oncomplete=res; tx.onerror=()=>rej(tx.error); }); }
+function ticketMeta(item){ const list=Array.isArray(item.tickets)?item.tickets.slice():[]; if(item.ticketName&&!list.some(x=>x.id===item.id)) list.unshift({id:item.id,name:item.ticketName}); return list; }
 
 function renderTrips(){
   const trips=loadTrips();
@@ -79,26 +83,21 @@ function renderTrips(){
   emptyState.classList.toggle('hidden',visible.length>0);
   emptyText.textContent=currentFilter==='archived' ? 'Tes voyages archivés apparaîtront ici.' : 'Ajoute ton premier voyage pour commencer.';
   visible.forEach(t=>{
-    const card=document.createElement('article'); card.className='trip-card';
+    const card=document.createElement('article'); card.className='trip-card travel-tile';
     const cover = t.coverUrl ? `url("${esc(t.coverUrl)}")` : defaultCover(t.name);
     card.innerHTML=`
-      <div class="trip-cover" style="background-image:${cover}"></div>
-      <div class="trip-body">
-        <div class="trip-title-row">
-          <div><h3 class="trip-title">${esc(t.name)}</h3><div class="trip-dates">${esc(formatDateRange(t.startDate,t.endDate))}</div></div>
-          ${t.archived?'<span class="badge">Archivé</span>':''}
-        </div>
-        ${t.destinations?`<div class="trip-dest">📍 ${esc(t.destinations)}</div>`:''}
-        <div class="trip-actions">
-          <button class="small-btn primary" data-action="open" data-id="${t.id}">Ouvrir</button>
-          <button class="small-btn" data-action="edit" data-id="${t.id}">Modifier</button>
-          <button class="small-btn" data-action="archive" data-id="${t.id}">${t.archived?'Restaurer':'Archiver'}</button>
-        </div>
+      <div class="trip-cover" style="background-image:${cover}">
+        <span class="countdown-pill">${esc(countdownLabel(t))}</span>
+        <div class="cover-copy"><h3>${esc(t.name)}</h3><p>${esc(formatDateRange(t.startDate,t.endDate))}</p>${t.destinations?`<small>📍 ${esc(t.destinations)}</small>`:''}</div>
+      </div>
+      <div class="trip-actions compact">
+        <button class="small-btn primary" data-action="open" data-id="${t.id}">Ouvrir</button>
+        <button class="small-btn" data-action="edit" data-id="${t.id}">Modifier</button>
+        <button class="small-btn" data-action="archive" data-id="${t.id}">${t.archived?'Restaurer':'Archiver'}</button>
       </div>`;
     tripList.appendChild(card);
   });
 }
-
 function openForm(trip=null){
   $('formTitle').textContent=trip?'Modifier le voyage':'Nouveau voyage';
   $('tripId').value=trip?.id||'';
@@ -140,8 +139,9 @@ function showDetail(id){
     <div class="detail-hero" style="background-image:${cover}">
       <div class="detail-overlay"><h2>${esc(t.name)}</h2><p>${esc(formatDateRange(t.startDate,t.endDate))}${t.destinations?` · ${esc(t.destinations)}`:''}</p></div>
     </div>
-    <div class="section-card quick-grid"><button class="feature-btn" data-feature="today"><span>☀️</span><strong>Aujourd’hui</strong><small>Programme du jour</small></button><button class="feature-btn" data-feature="weather"><span>🌤️</span><strong>Météo</strong><small>Pendant le voyage</small></button></div>
-    <div class="section-card"><h3>Organiser le voyage</h3><div class="menu-grid">${sectionButtons}</div></div>
+    <div class="journey-status"><span>${esc(countdownLabel(t))}</span><strong>${esc(t.destinations||'Ton prochain voyage')}</strong></div>
+    <div class="section-card quick-grid"><button class="feature-btn mint" data-feature="today"><span>☀️</span><strong>Aujourd’hui</strong><small>Mon planning du jour</small></button><button class="feature-btn sky" data-feature="weather"><span>🌤️</span><strong>Météo</strong><small>Prévisions du séjour</small></button></div>
+    <div class="section-card"><div class="card-heading"><div><div class="eyebrow">ACCÈS RAPIDE</div><h3>Organiser le voyage</h3></div></div><div class="menu-grid">${sectionButtons}</div></div>
     ${t.notes?`<div class="section-card"><h3>Notes</h3><div class="note-box">${esc(t.notes)}</div></div>`:''}
     <div class="detail-actions">
       <button class="small-btn primary" data-detail="edit">Modifier</button>
@@ -183,7 +183,7 @@ function renderItemCard(key,item){
   if(item.notes) lines.push(esc(item.notes));
   return `<article class="item-card">
     <div class="item-main"><h3>${esc(item.title||'Sans titre')}</h3>${lines.map(x=>`<p>${x}</p>`).join('')}</div>
-    <div class="item-links">${(item.address||item.to)?`<a class="small-btn" href="${mapsUrl(item.address||item.to)}" target="_blank">🗺️ Plans</a>`:''}${item.ticketName?`<button class="small-btn" data-ticket="${item.id}">🎫 Billet</button>`:''}</div>
+    <div class="item-links">${(item.address||item.to)?`<a class="small-btn" href="${mapsUrl(item.address||item.to)}" target="_blank">🗺️ Plans</a>`:''}${ticketMeta(item).map((t,i)=>`<button class="small-btn ticket-chip" data-ticket="${t.id}" title="${esc(t.name||'Billet')}">🎫 ${ticketMeta(item).length>1?`Billet ${i+1}`:'Billet'}</button>`).join('')}</div>
     <div class="item-actions"><button class="more-btn" data-edit-item="${item.id}">✎</button><button class="more-btn danger-text" data-delete-item="${item.id}">×</button></div>
   </article>`;
 }
@@ -240,7 +240,7 @@ function getFieldsForSection(key,item){
     `<div class="two-cols">${fieldHtml('date','Date','itemDate',item.date||'')}${fieldHtml('time','Heure','itemTime',item.time||'')}</div>`,
     fieldHtml('text','Adresse','itemAddress',item.address||'','placeholder="Adresse complète"'),
     fieldHtml('text','Lien / réservation','itemReference',item.reference||'','placeholder="Numéro ou lien facultatif"'),
-    `<label>Billet / réservation <input id="itemTicket" type="file" accept="application/pdf,image/*"><small>${item.ticketName?`Billet actuel : ${esc(item.ticketName)} · choisir un fichier pour le remplacer`:'PDF ou photo, stocké uniquement sur cet appareil.'}</small></label>`,
+    `<label>Billets & documents <input id="itemTickets" type="file" accept="application/pdf,image/*" multiple><small>${ticketMeta(item).length?`${ticketMeta(item).length} document(s) déjà enregistré(s). Tu peux en ajouter d’autres.`:'Tu peux sélectionner plusieurs PDF ou photos. Ils restent uniquement sur cet appareil.'}</small></label>`,
     fieldHtml('textarea','Notes','itemNotes',item.notes||'','placeholder="Informations utiles…"')
   ].join('');
   if(key==='checklist') return [
@@ -257,7 +257,7 @@ function collectItem(key,existing){
   if(key==='stays') return {...base,address:val('itemAddress'),startDate:val('itemStartDate'),endDate:val('itemEndDate'),reference:val('itemReference'),notes:val('itemNotes')};
   if(key==='activities') return {...base,date:val('itemDate'),time:val('itemTime'),location:val('itemLocation'),reference:val('itemReference'),notes:val('itemNotes')};
   if(key==='car') return {...base,company:val('itemCompany'),from:val('itemFrom'),to:val('itemTo'),startDate:val('itemStartDate'),endDate:val('itemEndDate'),reference:val('itemReference'),notes:val('itemNotes')};
-  if(key==='itinerary') return {...base,date:val('itemDate'),time:val('itemTime'),address:val('itemAddress'),reference:val('itemReference'),notes:val('itemNotes'),ticketName:existing?.ticketName||''};
+  if(key==='itinerary') return {...base,date:val('itemDate'),time:val('itemTime'),address:val('itemAddress'),reference:val('itemReference'),notes:val('itemNotes'),tickets:ticketMeta(existing||{}),ticketName:existing?.ticketName||''};
   if(key==='checklist') return {...base,notes:val('itemNotes'),done:existing?.done||false};
   return base;
 }
@@ -267,7 +267,15 @@ $('itemForm').addEventListener('submit',async (e)=>{
   const trips=loadTrips(); const trip=trips.find(t=>t.id===currentTripId); if(!trip) return;
   const items=sectionItems(trip,currentSection); const existing=items.find(x=>x.id===editingItemId);
   const item=collectItem(currentSection,existing);
-  if(currentSection==='itinerary'){ const f=$('itemTicket')?.files?.[0]; if(f){ await saveTicket(item.id,f); item.ticketName=f.name; } }
+  if(currentSection==='itinerary'){
+    const files=Array.from($('itemTickets')?.files||[]);
+    if(files.length){
+      const added=[];
+      for(const f of files){ const fid=uid(); await saveTicket(fid,f); added.push({id:fid,name:f.name,type:f.type}); }
+      item.tickets=[...ticketMeta(existing||{}),...added];
+      item.ticketName='';
+    }
+  }
   const nextItems=existing?items.map(x=>x.id===existing.id?item:x):[...items,item];
   const updated={...trip,sections:{...(trip.sections||{}),[currentSection]:nextItems},updatedAt:Date.now()};
   saveTrips(trips.map(t=>t.id===trip.id?updated:t)); closeItemForm(); showSection(currentSection);
@@ -308,7 +316,7 @@ $('detailContent').addEventListener('click',async (e)=>{
   if(delBtn){
     const trips=loadTrips(); const trip=trips.find(t=>t.id===currentTripId); if(!trip) return;
     if(confirm('Supprimer cet élément ?')){
-      if(currentSection==='itinerary') deleteTicket(delBtn.dataset.deleteItem).catch(()=>{});
+      if(currentSection==='itinerary'){ const doomed=sectionItems(trip,currentSection).find(x=>x.id===delBtn.dataset.deleteItem); for(const tk of ticketMeta(doomed||{})) deleteTicket(tk.id).catch(()=>{}); }
       const next=sectionItems(trip,currentSection).filter(x=>x.id!==delBtn.dataset.deleteItem);
       const updated={...trip,sections:{...(trip.sections||{}),[currentSection]:next}};
       saveTrips(trips.map(t=>t.id===trip.id?updated:t)); showSection(currentSection);

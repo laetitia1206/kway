@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#1f6f78" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Kway" />
+  <title>Kway — Mes voyages</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icon-192.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">MON CARNET DE VOYAGE</div>
+        <h1>Kway</h1>
+      </div>
+      <button id="newTripBtn" class="round-btn" aria-label="Ajouter un voyage">+</button>
+    </header>
+
+    <main>
+      <section id="homeView" class="view active">
+        <div class="hero-card">
+          <p class="hero-kicker">Prête pour le prochain départ ?</p>
+          <h2>Mes voyages</h2>
+          <p>Tout ce dont tu as besoin pour préparer, suivre et garder tes voyages au même endroit.</p>
+        </div>
+
+        <div class="segmented" role="tablist">
+          <button class="segment active" data-filter="active">À venir</button>
+          <button class="segment" data-filter="archived">Archives</button>
+        </div>
+
+        <div id="tripList" class="trip-list"></div>
+        <div id="emptyState" class="empty-state hidden">
+          <div class="empty-icon">✈️</div>
+          <h3>Aucun voyage ici</h3>
+          <p id="emptyText">Ajoute ton premier voyage pour commencer.</p>
+          <button id="emptyAddBtn" class="primary-btn">Ajouter un voyage</button>
+        </div>
+      </section>
+
+      <section id="detailView" class="view">
+        <button class="back-btn" id="backBtn">← Mes voyages</button>
+        <div id="detailContent"></div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="tripDialog">
+    <form id="tripForm" method="dialog" class="form-card">
+      <div class="form-head">
+        <div>
+          <div class="eyebrow">VOYAGE</div>
+          <h2 id="formTitle">Nouveau voyage</h2>
+        </div>
+        <button type="button" id="closeDialogBtn" class="icon-btn" aria-label="Fermer">×</button>
+      </div>
+
+      <input type="hidden" id="tripId" />
+
+      <label>Nom du voyage
+        <input id="tripName" required placeholder="Ex. Canada 2027" maxlength="60" />
+      </label>
+
+      <div class="two-cols">
+        <label>Date de début
+          <input id="startDate" type="date" required />
+        </label>
+        <label>Date de fin
+          <input id="endDate" type="date" required />
+        </label>
+      </div>
+
+      <label>Destinations
+        <input id="destinations" placeholder="Ex. Montréal • Ottawa • Toronto" maxlength="120" />
+      </label>
+
+      <label>Photo de couverture
+        <input id="coverUrl" type="url" placeholder="https://… (facultatif)" />
+      </label>
+
+      <label>Notes
+        <textarea id="tripNotes" rows="3" placeholder="Une idée, un objectif, une réservation à ne pas oublier…"></textarea>
+      </label>
+
+      <div class="form-actions">
+        <button type="button" id="cancelBtn" class="ghost-btn">Annuler</button>
+        <button type="submit" class="primary-btn">Enregistrer</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -247,7 +247,7 @@ function renderItemCard(key,item){
   if(item.notes) lines.push(esc(item.notes));
   return `<article class="item-card">
     <div class="item-main"><h3>${esc(item.title||'Sans titre')}</h3>${lines.map(x=>`<p>${x}</p>`).join('')}</div>
-    <div class="item-links">${(item.address||item.to)?`<a class="small-btn" href="${mapsUrl(item.address||item.to)}" target="_blank">🗺️ Plans</a>`:''}${ticketMeta(item).map((t,i)=>`<button class="small-btn ticket-chip" data-ticket="${t.id}" title="${esc(t.name||'Billet')}">🎫 ${ticketMeta(item).length>1?`Billet ${i+1}`:'Billet'}</button>`).join('')}</div>
+    <div class="item-links">${(item.address||item.location||item.to)?`<a class="small-btn plan-chip" href="${mapsUrl(item.address||item.location||item.to)}" target="_blank" rel="noopener">🗺️ Plans</a>`:''}${ticketMeta(item).map((t,i)=>`<button class="small-btn ticket-chip" data-ticket="${t.id}" title="${esc(t.name||'Billet')}">🎫 ${ticketMeta(item).length>1?`Billet ${i+1}`:'Billet'}</button>`).join('')}</div>
     <div class="item-actions"><button class="more-btn" data-edit-item="${item.id}">✎</button><button class="more-btn danger-text" data-delete-item="${item.id}">×</button></div>
   </article>`;
 }
@@ -287,7 +287,7 @@ function getFieldsForSection(key,item){
   if(key==='activities') return [
     fieldHtml('text','Activité','itemTitle',item.title||'','required placeholder="Ex. Match NBA"'),
     `<div class="two-cols">${fieldHtml('date','Date','itemDate',item.date||'')}${fieldHtml('time','Heure','itemTime',item.time||'')}</div>`,
-    fieldHtml('text','Lieu','itemLocation',item.location||'','placeholder="Scotiabank Arena"'),
+    fieldHtml('text','Lieu / adresse','itemLocation',item.location||'','placeholder="Ex. Nausicaá, Boulevard Sainte-Beuve, Boulogne-sur-Mer"'),
     fieldHtml('text','Référence / billet','itemReference',item.reference||''),
     `<label>Billets & documents <input id="itemTickets" type="file" accept="application/pdf,image/*" multiple><small>${ticketMeta(item).length?`${ticketMeta(item).length} document(s) déjà enregistré(s). Tu peux en ajouter d’autres.`:'Tu peux sélectionner plusieurs PDF ou photos. Ils restent uniquement sur cet appareil.'}</small></label>`,
     fieldHtml('textarea','Notes','itemNotes',item.notes||'')

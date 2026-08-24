@@ -135,3 +135,104 @@ label small{display:block;margin-top:7px;color:#71809a;line-height:1.35}
 .trip-cover::after,.detail-hero::after{z-index:1}
 .countdown-pill,.cover-copy,.detail-overlay{position:relative;z-index:2}
 .detail-overlay{position:absolute}
+
+/* Kway 3.3.3 — correctifs responsive iPhone + Plans */
+.countdown-pill{
+  position:absolute !important;
+  z-index:3 !important;
+  top:16px;
+  left:16px;
+  right:auto;
+  bottom:auto;
+  max-width:calc(100% - 32px);
+  white-space:nowrap;
+}
+.cover-copy{
+  position:absolute !important;
+  z-index:2 !important;
+  left:20px;
+  right:20px;
+  bottom:20px;
+  top:auto;
+}
+.detail-overlay{
+  position:absolute !important;
+  z-index:2 !important;
+  left:0;
+  right:0;
+  bottom:0;
+}
+.item-card{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  grid-template-areas:
+    "main actions"
+    "links links";
+  align-items:start;
+  gap:12px;
+}
+.item-main{grid-area:main;min-width:0}
+.item-actions{grid-area:actions;align-self:start}
+.item-links{
+  grid-area:links;
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin:2px 0 0;
+  width:100%;
+}
+.item-links .small-btn{
+  max-width:100%;
+}
+.plan-chip{
+  background:#eaf2ff !important;
+  border-color:#c7d9ff !important;
+  color:#0b56d9 !important;
+}
+@media(max-width:650px){
+  .travel-tile .trip-cover{height:235px}
+  .cover-copy{
+    left:18px;
+    right:18px;
+    bottom:18px;
+  }
+  .cover-copy h3{
+    font-size:28px;
+    line-height:1.02;
+    margin-bottom:7px;
+  }
+  .countdown-pill{
+    top:14px;
+    left:14px;
+    font-size:12px;
+    padding:8px 11px;
+  }
+  .item-card{
+    grid-template-columns:minmax(0,1fr) auto;
+    grid-template-areas:
+      "main actions"
+      "links links";
+    padding:16px;
+    align-items:start;
+  }
+  .item-main h3{
+    margin-top:3px;
+    overflow-wrap:anywhere;
+  }
+  .item-actions{
+    display:flex;
+    flex-direction:row;
+    gap:7px;
+  }
+  .item-links{
+    padding-top:4px;
+  }
+  .item-links .small-btn{
+    min-height:42px;
+    padding:9px 12px;
+    font-size:14px;
+  }
+  .ticket-chip{
+    flex:0 1 auto;
+  }
+}

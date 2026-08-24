@@ -3,6 +3,12 @@ let currentFilter = 'active';
 let currentTripId = null;
 let currentSection = null;
 let editingItemId = null;
+let cloudUser = null;
+let cloudUnsubscribe = null;
+let cloudApplying = false;
+let cloudReady = false;
+let cloudInitialSnapshot = true;
+let cloudSyncTimer = null;
 
 const $ = (id) => document.getElementById(id);
 const tripList = $('tripList');
@@ -24,7 +30,35 @@ function loadTrips(){
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
   catch { return []; }
 }
-function saveTrips(trips){ localStorage.setItem(STORAGE_KEY, JSON.stringify(trips)); }
+function saveTripsLocal(trips){ localStorage.setItem(STORAGE_KEY, JSON.stringify(trips)); }
+function stripLocalOnlyData(trips){
+  return trips.map(t=>{
+    const copy=JSON.parse(JSON.stringify(t));
+    delete copy.coverData;
+    // Ticket metadata can sync, but the actual PDF/photo blobs remain in IndexedDB on each device.
+    return copy;
+  });
+}
+function mergeLocalMedia(cloudTrips,localTrips){
+  const localById=new Map(localTrips.map(t=>[t.id,t]));
+  return cloudTrips.map(t=>{
+    const local=localById.get(t.id);
+    return {...t, coverData:local?.coverData||''};
+  });
+}
+function saveTrips(trips){
+  saveTripsLocal(trips);
+  if(!cloudApplying && cloudUser && window.KwayCloud){
+    clearTimeout(cloudSyncTimer);
+    cloudSyncTimer=setTimeout(async ()=>{
+      try{
+        showSyncState('syncing');
+        await window.KwayCloud.syncTrips(cloudUser.uid,stripLocalOnlyData(trips));
+        showSyncState('ok');
+      }catch(err){ console.error(err); showSyncState('error'); }
+    },250);
+  }
+}
 function uid(){ return (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36)+Math.random().toString(36).slice(2)); }
 function esc(v=''){ return String(v).replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#039;','"':'&quot;'}[c])); }
 function sectionItems(t,key){ return Array.isArray(t.sections?.[key]) ? t.sections[key] : []; }
@@ -385,6 +419,87 @@ $('coverPhoto').addEventListener('change',async ()=>{
 });
 $('removeCoverBtn').addEventListener('click',()=>{ $('coverPhoto').value=''; $('coverPhoto').dataset.remove='1'; updateCoverPreview(''); });
 
+
+
+function humanAuthError(err){
+  const code=err?.code||'';
+  if(code.includes('invalid-credential')||code.includes('wrong-password')) return 'Adresse e-mail ou mot de passe incorrect.';
+  if(code.includes('email-already-in-use')) return 'Un compte existe déjà avec cette adresse e-mail.';
+  if(code.includes('weak-password')) return 'Le mot de passe doit contenir au moins 6 caractères.';
+  if(code.includes('invalid-email')) return 'Cette adresse e-mail n’est pas valide.';
+  if(code.includes('too-many-requests')) return 'Trop de tentatives. Réessaie dans quelques minutes.';
+  return err?.message||'Une erreur est survenue.';
+}
+function showSyncState(state){
+  const btn=$('accountBtn'); const toast=$('syncToast');
+  if(!btn) return;
+  if(!cloudUser){ btn.textContent='Compte'; btn.classList.remove('synced'); return; }
+  if(state==='syncing'){ btn.textContent='☁️ …'; }
+  else if(state==='error'){ btn.textContent='☁️ !'; }
+  else { btn.textContent='☁️'; btn.classList.add('synced'); if(toast){ toast.textContent='☁️ Synchronisé'; toast.classList.remove('hidden'); setTimeout(()=>toast.classList.add('hidden'),1400); } }
+}
+function updateAccountUi(user){
+  cloudUser=user||null;
+  const out=$('authLoggedOut'), inside=$('authLoggedIn');
+  if(user){
+    out?.classList.add('hidden'); inside?.classList.remove('hidden');
+    if($('accountEmail')) $('accountEmail').textContent=user.email||'Compte Kway';
+    showSyncState('ok');
+  }else{
+    inside?.classList.add('hidden'); out?.classList.remove('hidden');
+    if($('accountBtn')){ $('accountBtn').textContent='Compte'; $('accountBtn').classList.remove('synced'); }
+  }
+}
+async function connectCloudUser(user){
+  updateAccountUi(user);
+  if(cloudUnsubscribe){ cloudUnsubscribe(); cloudUnsubscribe=null; }
+  if(!user){ cloudReady=false; renderTrips(); return; }
+  cloudInitialSnapshot=true;
+  const localAtLogin=loadTrips();
+  cloudUnsubscribe=window.KwayCloud.subscribeTrips(user.uid,async cloudTrips=>{
+    try{
+      if(cloudInitialSnapshot){
+        cloudInitialSnapshot=false;
+        if(cloudTrips.length===0 && localAtLogin.length>0){
+          showSyncState('syncing');
+          await window.KwayCloud.syncTrips(user.uid,stripLocalOnlyData(localAtLogin));
+          cloudReady=true; showSyncState('ok'); return;
+        }
+      }
+      cloudApplying=true;
+      const merged=mergeLocalMedia(cloudTrips,loadTrips());
+      saveTripsLocal(merged);
+      cloudApplying=false;
+      cloudReady=true;
+      renderTrips();
+      if(currentTripId){ const exists=merged.some(t=>t.id===currentTripId); if(exists) showDetail(currentTripId); }
+      showSyncState('ok');
+    }catch(err){ cloudApplying=false; console.error(err); showSyncState('error'); }
+  },err=>{ console.error(err); showSyncState('error'); });
+}
+function initCloud(){
+  if(!window.KwayCloud) return;
+  window.KwayCloud.onUser(connectCloudUser);
+}
+if(window.KwayCloud) initCloud(); else window.addEventListener('kway-cloud-ready',initCloud,{once:true});
+
+$('accountBtn')?.addEventListener('click',()=>{ updateAccountUi(cloudUser); $('authError')?.classList.add('hidden'); $('authDialog').showModal(); });
+$('closeAuthBtn')?.addEventListener('click',()=>$('authDialog').close());
+$('authForm')?.addEventListener('submit',async e=>{
+  e.preventDefault(); if(cloudUser) return;
+  const email=$('authEmail').value.trim(), password=$('authPassword').value;
+  const box=$('authError'); box.classList.add('hidden');
+  try{ await window.KwayCloud.login(email,password); $('authDialog').close(); }
+  catch(err){ box.textContent=humanAuthError(err); box.classList.remove('hidden'); }
+});
+$('registerBtn')?.addEventListener('click',async ()=>{
+  const email=$('authEmail').value.trim(), password=$('authPassword').value;
+  const box=$('authError'); box.classList.add('hidden');
+  if(!email||password.length<6){ box.textContent='Entre une adresse e-mail et un mot de passe d’au moins 6 caractères.'; box.classList.remove('hidden'); return; }
+  try{ await window.KwayCloud.register(email,password); $('authDialog').close(); }
+  catch(err){ box.textContent=humanAuthError(err); box.classList.remove('hidden'); }
+});
+$('logoutBtn')?.addEventListener('click',async ()=>{ if(window.KwayCloud) await window.KwayCloud.logout(); $('authDialog').close(); });
 
 if('serviceWorker' in navigator){ window.addEventListener('load',()=>navigator.serviceWorker.register('./service-worker.js').catch(()=>{})); }
 renderTrips();

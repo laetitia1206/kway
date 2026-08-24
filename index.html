@@ -19,7 +19,10 @@
         <div class="eyebrow">MON CARNET DE VOYAGE</div>
         <h1 class="brand">Kway <span>⌁✈</span></h1>
       </div>
-      <button id="newTripBtn" class="round-btn" aria-label="Ajouter un voyage">+</button>
+      <div class="top-actions">
+        <button id="accountBtn" class="account-btn" type="button">Compte</button>
+        <button id="newTripBtn" class="round-btn" aria-label="Ajouter un voyage">+</button>
+      </div>
     </header>
 
     <main>
@@ -116,6 +119,42 @@
     </form>
   </dialog>
 
+
+  <dialog id="authDialog">
+    <form id="authForm" class="form-card auth-card">
+      <div class="form-head">
+        <div>
+          <div class="eyebrow">SYNCHRONISATION</div>
+          <h2>Mon compte Kway</h2>
+        </div>
+        <button type="button" id="closeAuthBtn" class="icon-btn" aria-label="Fermer">×</button>
+      </div>
+      <div id="authLoggedOut">
+        <p class="auth-intro">Connecte-toi avec le même compte sur ton iPhone et ton Mac pour retrouver les mêmes voyages.</p>
+        <label>Adresse e-mail
+          <input id="authEmail" type="email" autocomplete="email" required placeholder="ton@email.fr" />
+        </label>
+        <label>Mot de passe
+          <input id="authPassword" type="password" autocomplete="current-password" required minlength="6" placeholder="6 caractères minimum" />
+        </label>
+        <div id="authError" class="error-box hidden"></div>
+        <div class="form-actions auth-actions">
+          <button type="button" id="registerBtn" class="ghost-btn">Créer mon compte</button>
+          <button type="submit" class="primary-btn">Se connecter</button>
+        </div>
+      </div>
+      <div id="authLoggedIn" class="hidden account-panel">
+        <div class="sync-ok">☁️ <strong>Synchronisation activée</strong></div>
+        <p>Connectée avec <strong id="accountEmail"></strong></p>
+        <p class="muted-note">Les voyages, programmes et réservations sont synchronisés. Les photos de couverture et les fichiers de billets restent pour l’instant sur l’appareil où tu les as ajoutés.</p>
+        <button type="button" id="logoutBtn" class="danger-btn wide-btn">Se déconnecter</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="syncToast" class="sync-toast hidden">☁️ Synchronisé</div>
+
+  <script type="module" src="firebase.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
